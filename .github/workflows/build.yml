@@ -22,12 +22,13 @@ jobs:
           cd pico-sdk
           git submodule update --init
           cd ..
+          echo "PICO_SDK_PATH=$GITHUB_WORKSPACE/pico-sdk" >> $GITHUB_ENV
 
       - name: Build
         run: |
           mkdir build
           cd build
-          cmake .. -DPICO_SDK_PATH=$GITHUB_WORKSPACE/pico-sdk
+          cmake .. -DPICO_SDK_PATH=$PICO_SDK_PATH
           make
 
       - name: Upload UF2
