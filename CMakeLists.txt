@@ -12,8 +12,6 @@ pico_sdk_init()
 
 add_executable(dongle_emu dongle_emu.c)
 
-target_include_directories(dongle_emu PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-
 target_link_libraries(dongle_emu
     pico_stdlib
     tinyusb_device
