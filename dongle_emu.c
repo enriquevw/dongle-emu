@@ -89,12 +89,12 @@ uint8_t const desc_hid_report[] = {
     0x15, 0x00,        //   Logical Minimum (0)
     0x26, 0xFF, 0x00,  //   Logical Maximum (255)
     0x75, 0x08,        //   Report Size (8)
-    0x95, 0x14,        //   Report Count (20)
-    0xB1, 0x02,        //   Feature (Data,Var,Abs,No Wrap,Linear,No Pref,Non Volatile)
+    0x95, 0x08,        //   Report Count (8) -- matches real dongle
+    0xB1, 0x06,        //   Feature
     0x85, 0x02,        //   Report ID (2)
     0x09, 0x03,        //   Usage (0x03)
     0x96, 0x14, 0x00,  //   Report Count (20)
-    0xB1, 0x02,        //   Feature (Data,Var,Abs,No Wrap,Linear,No Pref,Non Volatile)
+    0xB1, 0x06,        //   Feature
     0xC0               // End Collection
 };
 
@@ -113,6 +113,8 @@ uint8_t const desc_configuration[] = {
     sizeof(desc_hid_report)&0xFF, sizeof(desc_hid_report)>>8,
     0x07,0x05,0x81,0x03,0x08,0x00,0x0A
 };
+
+
 
 uint8_t const *tud_descriptor_device_cb(void) { return desc_device; }
 uint8_t const *tud_descriptor_configuration_cb(uint8_t i) { (void)i; return desc_configuration; }
