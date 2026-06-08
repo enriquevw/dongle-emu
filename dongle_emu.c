@@ -1,16 +1,15 @@
-#include "bsp/board_api.h"
+#include <stdio.h>
+#include <string.h>
+#include "pico/stdlib.h"
+#include "pico/binary_info.h"
 #include "tusb.h"
 
-//--------------------------------------------------------------------+
-// MACRO CONSTANT TYPEDEF PROTOTYPES
-//--------------------------------------------------------------------+
+#define USB_VID      0x3689
+#define USB_PID      0x8762
+#define USB_BCD      0x0200
 
-/* Blink pattern
- * - 250 ms  : device not mounted
- * - 1000 ms : device mounted
- * - 2500 ms : device is suspended
- */
-enum  {
+/* Blink pattern */
+enum {
   BLINK_NOT_MOUNTED = 250,
   BLINK_MOUNTED = 1000,
   BLINK_SUSPENDED = 2500,
@@ -19,141 +18,174 @@ enum  {
 static uint32_t blink_interval_ms = BLINK_NOT_MOUNTED;
 
 void led_blinking_task(void);
-void hid_task(void);
 
-/*------------- MAIN -------------*/
 int main(void) {
   board_init();
   tusb_init();
 
   while (1) {
-    tud_task(); // tinyusb device task
+    tud_task();
     led_blinking_task();
-    hid_task();
   }
 
   return 0;
 }
 
-//--------------------------------------------------------------------+
-// Device callbacks
-//--------------------------------------------------------------------+
-
-// Invoked when device is mounted
 void tud_mount_cb(void) {
   blink_interval_ms = BLINK_MOUNTED;
 }
 
-// Invoked when device is unmounted
 void tud_umount_cb(void) {
   blink_interval_ms = BLINK_NOT_MOUNTED;
 }
 
-// Invoked when usb bus is suspended
-// remote_wakeup_en : if host allow us  to perform remote wakeup
-// Within 7ms, device must draw an average of current less than 2.5 mA from bus
 void tud_suspend_cb(bool remote_wakeup_en) {
   (void) remote_wakeup_en;
   blink_interval_ms = BLINK_SUSPENDED;
 }
 
-// Invoked when usb bus is resumed
 void tud_resume_cb(void) {
   blink_interval_ms = BLINK_MOUNTED;
 }
 
-//--------------------------------------------------------------------+
-// USB HID
-//--------------------------------------------------------------------+
+/* ---- HID Report Descriptor (matches your dongle) ---- */
+uint8_t const desc_hid_report[] = {
+    0x06, 0x00, 0xFF,
+    0x09, 0x01,
+    0xA1, 0x01,
+    0x85, 0x01,
+    0x09, 0x01,
+    0x15, 0x00,
+    0x26, 0xFF, 0x00,
+    0x75, 0x08,
+    0x95, 0x14,
+    0xB1, 0x06,
+    0x85, 0x02,
+    0x09, 0x03,
+    0x96, 0x14, 0x00,
+    0xB1, 0x06,
+    0xC0
+};
 
-static void send_hid_report(uint8_t report_id, uint32_t btn) {
-  // skip if hid is not ready yet
-  if (!tud_hid_ready()) return;
+const char* string_desc_arr[] = {
+    (const char[]) { 0x09, 0x04 },
+    "USBKey",
+};
 
-  switch(report_id) {
-    case 1:
-    {
-      // use to avoid send multiple consecutive zero report for keyboard
-      static bool has_keyboard_key = false;
+uint8_t const desc_device[] = {
+    0x12,
+    0x01,
+    0x00, 0x02,
+    0x00,
+    0x00,
+    0x00,
+    0x08,
+    USB_VID & 0xFF, USB_VID >> 8,
+    USB_PID & 0xFF, USB_PID >> 8,
+    0x00, 0x02,
+    0x01,
+    0x01,
+    0x00,
+    0x01
+};
 
-      if (btn) {
-        uint8_t keycode[6] = { 0 };
-        keycode[0] = HID_KEY_A;
-        tud_hid_keyboard_report(1, 0, keycode);
-        has_keyboard_key = true;
-      } else {
-        // send empty key report if previously has key pressed
-        if (has_keyboard_key) tud_hid_keyboard_report(1, 0, NULL);
-        has_keyboard_key = false;
-      }
-    }
-    break;
+uint8_t const desc_configuration[] = {
+    0x09,
+    0x02,
+    0x22, 0x00,
+    0x01,
+    0x01,
+    0x01,
+    0x80,
+    0x19,
 
-    default: break;
-  }
+    0x09,
+    0x04,
+    0x00,
+    0x00,
+    0x01,
+    0x03,
+    0x00,
+    0x00,
+    0x00,
+
+    0x09,
+    0x21,
+    0x11, 0x01,
+    0x00,
+    0x01,
+    0x22,
+    sizeof(desc_hid_report) & 0xFF, sizeof(desc_hid_report) >> 8,
+
+    0x07,
+    0x05,
+    0x81,
+    0x03,
+    0x08, 0x00,
+    0x0A
+};
+
+uint8_t const *tud_descriptor_device_cb(void) {
+  return desc_device;
 }
 
-// Every 10ms, we will sent 1 report for each HID profile (keyboard, mouse etc ..)
-// tud_hid_report_complete_cb() is used to send the next report after previous one is complete
-void hid_task(void) {
-  // Poll every 10ms
-  const uint32_t interval_ms = 10;
-  static uint32_t start_ms = 0;
-
-  if (board_millis() - start_ms < interval_ms) return;
-  start_ms += interval_ms;
-
-  uint32_t const btn = board_button_read() ? 1 : 0;
-
-  // Remote wakeup
-  if (tud_suspended() && btn) {
-    // Wake up host if we are in suspend mode
-    // and REMOTE_WAKEUP feature is enabled by host
-    tud_remote_wakeup();
-  } else {
-    send_hid_report(1, btn);
-  }
+uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
+  (void)index;
+  return desc_configuration;
 }
 
-// Invoked when received GET_REPORT control request
-// Application must fill buffer report's content and return its length.
-// Return zero will cause the stack to STALL request
-uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type, uint8_t* buffer, uint16_t reqlen) {
-  (void) instance;
-  (void) report_id;
-  (void) report_type;
-  (void) buffer;
-  (void) reqlen;
+uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
+  (void)langid;
+  static uint16_t str_buf[32];
+  uint8_t len;
 
+  if (index == 0) {
+    str_buf[0] = 0x0304;
+    return (uint16_t*)str_buf;
+  }
+
+  const char* str = string_desc_arr[index];
+  len = strlen(str);
+  if (len > 31) len = 31;
+  for (uint8_t i = 0; i < len; i++) {
+    str_buf[i + 1] = str[i];
+  }
+  str_buf[0] = (len << 8) | 0x03;
+  return str_buf;
+}
+
+uint8_t const *tud_hid_descriptor_report_cb(uint8_t itf) {
+  (void)itf;
+  return desc_hid_report;
+}
+
+uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id,
+                                hid_report_type_t report_type,
+                                uint8_t* buffer, uint16_t reqlen) {
+  (void)itf;
+  (void)report_id;
+  (void)report_type;
+  (void)buffer;
+  (void)reqlen;
   return 0;
 }
 
-// Invoked when received SET_REPORT control request or
-// received data on OUT endpoint ( Report ID = 0, Type = 0 )
-void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type, uint8_t const* buffer, uint16_t bufsize) {
-  (void) instance;
-
-  if (report_type == HID_REPORT_TYPE_OUTPUT) {
-    if (report_id == 1) {
-      // do nothing
-    }
-  }
+void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id,
+                            hid_report_type_t report_type,
+                            uint8_t const* buffer, uint16_t bufsize) {
+  (void)itf;
+  (void)report_id;
+  (void)report_type;
+  (void)buffer;
+  (void)bufsize;
 }
 
-//--------------------------------------------------------------------+
-// BLINKING TASK
-//--------------------------------------------------------------------+
 void led_blinking_task(void) {
   static uint32_t start_ms = 0;
   static bool led_state = false;
-
-  // blink is disabled
   if (!blink_interval_ms) return;
-
-  // Blink every interval ms
   if (board_millis() - start_ms < blink_interval_ms) return;
   start_ms += blink_interval_ms;
-
   board_led_write(led_state);
-  led_state = !led_state; // toggle
+  led_state = !led_state;
 }
