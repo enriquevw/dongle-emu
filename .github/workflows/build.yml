@@ -1,0 +1,36 @@
+name: Build UF2
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Pico SDK
+        run: |
+          git clone https://github.com/raspberrypi/pico-sdk.git --branch 2.1.1
+          cd pico-sdk
+          git submodule update --init
+
+      - name: Install toolchain
+        run: |
+          sudo apt update
+          sudo apt install -y cmake gcc-arm-none-eabi libnewlib-arm-none-eabi build-essential
+
+      - name: Build
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DPICO_SDK_PATH=../pico-sdk -DPICO_BOARD=pico
+          make
+
+      - name: Upload UF2
+        uses: actions/upload-artifact@v4
+        with:
+          name: dongle-emu-uf2
+          path: build/dongle_emu.uf2
