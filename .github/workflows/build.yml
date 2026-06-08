@@ -11,22 +11,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Pico SDK
-        run: |
-          git clone https://github.com/raspberrypi/pico-sdk.git --branch 2.1.1
-          cd pico-sdk
-          git submodule update --init
-
       - name: Install toolchain
         run: |
           sudo apt update
           sudo apt install -y cmake gcc-arm-none-eabi libnewlib-arm-none-eabi build-essential
 
+      - name: Clone Pico SDK
+        run: |
+          git clone https://github.com/raspberrypi/pico-sdk.git
+          cd pico-sdk
+          git submodule update --init
+          cd ..
+
       - name: Build
         run: |
           mkdir build
           cd build
-          cmake .. -DPICO_SDK_PATH=../pico-sdk -DPICO_BOARD=pico
+          cmake .. -DPICO_SDK_PATH=$GITHUB_WORKSPACE/pico-sdk
           make
 
       - name: Upload UF2
