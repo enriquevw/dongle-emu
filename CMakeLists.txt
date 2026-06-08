@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.13)
 
-include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
+if(NOT DEFINED PICO_SDK_PATH)
+    message(FATAL_ERROR "PICO_SDK_PATH is not set")
+endif()
+
+include(${PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 
 project(dongle_emu)
 
