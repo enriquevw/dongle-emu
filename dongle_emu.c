@@ -69,7 +69,12 @@ void led_blinking_task(void) {
 int main(void) {
     gpio_init(LED_PIN);
     gpio_set_dir(LED_PIN, GPIO_OUT);
+
+    // Small delay to let USB stabilize on older hosts
+    sleep_ms(100);
+
     tusb_init();
+
     while (1) { tud_task(); led_blinking_task(); }
     return 0;
 }
